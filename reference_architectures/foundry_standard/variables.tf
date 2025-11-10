@@ -54,3 +54,18 @@ variable "projects" {
   ]
 }
 
+variable "model_deployments" {
+  description = "Override list of model deployment objects (name, version, format, optional sku { name, capacity }). Set to null to use module defaults (gpt-4_1, gpt-4o, o4_mini, text_embedding_3_large)."
+  type = list(object({
+    name    = string
+    version = string
+    format  = string
+    sku = optional(object({
+      name     = string
+      capacity = number
+    }))
+  }))
+  default  = null
+  nullable = true
+}
+

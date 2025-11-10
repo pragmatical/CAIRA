@@ -40,13 +40,13 @@ For these scenarios, we recommend you use the [foundry_standard_private](../foun
 |----------------------------------------------------|------------------------------------|-----------------------------------------------------------------------------------------------|
 | **Resource Group**                                 | Logical container for resources    | Created if not provided; can use existing resource group via `resource_group_resource_id`     |
 | **Azure AI Foundry Account and Project**           | Core AI platform resources         | Deployed via Terraform module; project identity managed automatically                         |
-| **Model Deployments**                              | Provides default models for agents | Uses `common_models` module; includes GPT‑4.1, o4‑mini, text-embedding-3-large                |
+| **Model Deployments**                              | Provides default models for agents | Configurable via `model_deployments` variable; defaults to GPT‑4o, GPT‑4o‑mini, text-embedding-3-large |
 | **Log Analytics Workspace + Application Insights** | Monitoring and observability       | App Insights connected to Log Analytics Workspace; deployed and wired automatically           |
-| **Azure Cosmos DB Account**                        | Data storage for agents            | Provisioned or referenced via `dependant_resources.tf`; explicitly wired via host connections |
-| **Azure Storage Account**                          | File and blob storage for agents   | Provisioned or referenced via `dependant_resources.tf`; explicitly wired via host connections |
-| **Azure AI Search Service**                        | Search capabilities for agents     | Provisioned or referenced via `dependant_resources.tf`; explicitly wired via host connections |
+| **Azure Cosmos DB Account**                        | Data storage for agents            | Shared across projects; provisioned or referenced via `dependant_resources.tf`                  |
+| **Azure Storage Account**                          | File and blob storage for agents   | Shared across projects; provisioned or referenced via `dependant_resources.tf`                  |
+| **Azure AI Search Service**                        | Search capabilities for agents     | Shared across projects; provisioned or referenced via `dependant_resources.tf`                  |
 
-Note: The architecture diagram is similar in shape to the basic configuration with the addition that agent capability host connections are explicitly bound to Cosmos DB, Storage, and Search you select or provide.
+Note: The architecture diagram is similar in shape to the basic configuration with the addition that agent capability host connections are explicitly bound to Cosmos DB, Storage, and Search you select or provide. All projects share the same physical resources (cost-efficient), but each project gets unique connection names (e.g., `cosmos-standard-{unique}-default-project`) to avoid conflicts.
 
 ## Key Features
 
@@ -137,7 +137,7 @@ This architecture now uses a single `projects` collection to define all AI Found
 - `project_display_name = "Default Project"`
 - `project_description = "Default Project description"`
 
-Override `projects` with multiple objects to create several projects; set it to an empty list (`projects = []`) to create no projects (advanced scenarios). All projects currently share the same capability host connections. You can later introduce per-project host resources by adding a dedicated capability host module with a `for_each`.
+Override `projects` with multiple objects to create several projects; set it to an empty list (`projects = []`) to create no projects (advanced scenarios). All projects share the same physical capability host resources (Cosmos DB, Storage, AI Search) for cost efficiency. Each project automatically gets unique connection names by appending the project name (e.g., `cosmos-db-abc123-default-project`, `cosmos-db-abc123-experimentation`) to avoid Azure connection naming conflicts.
 
 Example `terraform.tfvars` multi-project snippet:
 
@@ -180,11 +180,12 @@ Future extension ideas:
 
 ## Controlling Dependent Services (Data Sovereignty)
 
-This configuration wires agent capability host connections to Cosmos DB, Storage, and AI Search. You have two paths:
+This configuration wires agent capability host connections to Cosmos DB, Storage, and AI Search. All projects share the same physical resources for cost efficiency. You have two paths:
 
 1. **Default** (create new dependent resources)
-   - The file `dependant_resources.tf` provisions Cosmos DB, Storage, and AI Search in the same resource group/region.
-   - The module input `agent_capability_host_connections` in `main.tf` connects the agent to these newly created resources.
+   - The file `dependant_resources.tf` provisions a single set of Cosmos DB, Storage, and AI Search resources in the same resource group/region.
+   - All projects connect to these shared resources with unique connection names (automatically appended with project name).
+   - This approach minimizes costs while maintaining logical separation via connection naming.
 
 1. **Bring Your Own** (use existing, compliant resources)
    - Replace the resources in `dependant_resources.tf` with data sources that reference approved/shared services, and wire those into `agent_capability_host_connections` in `main.tf`.
@@ -243,8 +244,11 @@ module "ai_foundry" {
 
 ## Cost Considerations
 
-- In addition to AI Foundry costs, this configuration provisions Cosmos DB, Storage, and AI Search; review SKUs/retention settings
+- In addition to AI Foundry costs, this configuration provisions a **single shared set** of Cosmos DB, Storage, and AI Search resources; review SKUs/retention settings
+- **Multi-project deployments**: All projects share the same capability host resources (1 Cosmos DB + 1 Storage + 1 AI Search regardless of project count), providing cost efficiency
+- **Data isolation note**: Projects share physical resources but have logically separate connections; data is not isolated at the resource level
 - Default LAW retention is 30 days (PerGB2018); adjust to your needs
+- If you require complete data isolation between projects, consider creating per-project resources manually or using separate deployments
 
 ## Troubleshooting
 
@@ -272,16 +276,14 @@ module "ai_foundry" {
 
 ## Modules
 
-| Name                           | Source                                                        | Version |
-|--------------------------------|---------------------------------------------------------------|---------|
-| ai\_foundry                    | ../../modules/ai_foundry                                      | n/a     |
-| application\_insights          | Azure/avm-res-insights-component/azurerm                      | 0.2.0   |
-| capability\_host\_resources\_1 | ../../modules/new_resources_agent_capability_host_connections | n/a     |
-| capability\_host\_resources\_2 | ../../modules/new_resources_agent_capability_host_connections | n/a     |
-| common\_models                 | ../../modules/common_models                                   | n/a     |
-| default\_project               | ../../modules/ai_foundry_project                              | n/a     |
-| naming                         | Azure/naming/azurerm                                          | 0.4.2   |
-| secondary\_project             | ../../modules/ai_foundry_project                              | n/a     |
+| Name                                        | Source                                                        | Version |
+|---------------------------------------------|---------------------------------------------------------------|---------||
+| ai\_foundry                                 | ../../modules/ai_foundry                                      | n/a     |
+| application\_insights                       | Azure/avm-res-insights-component/azurerm                      | 0.2.0   |
+| capability\_host\_resources                 | ../../modules/new_resources_agent_capability_host_connections | n/a     |
+| common\_models                              | ../../modules/common_models                                   | n/a     |
+| naming                                      | Azure/naming/azurerm                                          | 0.4.2   |
+| projects (for\_each collection)             | ../../modules/ai_foundry_project                              | n/a     |
 
 ## Resources
 
@@ -292,32 +294,32 @@ module "ai_foundry" {
 
 ## Inputs
 
-| Name                          | Description                                                                                                                                                                                                 | Type          | Default           | Required |
-|-------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|-------------------|:--------:|
-| enable\_telemetry             | This variable controls whether or not telemetry is enabled for the module.<br/>For more information see <https://aka.ms/avm/telemetryinfo>.<br/>If it is set to false, then no telemetry will be collected. | `bool`        | `true`            |    no    |
-| location                      | Azure region where the resource should be deployed.                                                                                                                                                         | `string`      | `"swedencentral"` |    no    |
-| resource\_group\_resource\_id | The resource group resource id where the module resources will be deployed. If not provided, a new resource group will be created.                                                                          | `string`      | `null`            |    no    |
-| sku                           | The SKU for the AI Foundry resource. The default is 'S0'.                                                                                                                                                   | `string`      | `"S0"`            |    no    |
-| tags                          | (Optional) Tags to be applied to all resources.                                                                                                                                                             | `map(string)` | `null`            |    no    |
+| Name                          | Description                                                                                                                                                                                                 | Type           | Default           | Required |
+|-------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------|-------------------|:--------:|
+| enable\_telemetry             | This variable controls whether or not telemetry is enabled for the module.<br/>For more information see <https://aka.ms/avm/telemetryinfo>.<br/>If it is set to false, then no telemetry will be collected. | `bool`         | `true`            |    no    |
+| location                      | Azure region where the resource should be deployed.                                                                                                                                                         | `string`       | `"swedencentral"` |    no    |
+| model\_deployments             | Override default model deployments. List of model objects with name, version, format, and optional sku (name, capacity). If null, deploys GPT-4o, GPT-4o-mini, and text-embedding-3-large by default.      | `list(object)` | `null`            |    no    |
+| resource\_group\_resource\_id | The resource group resource id where the module resources will be deployed. If not provided, a new resource group will be created.                                                                          | `string`       | `null`            |    no    |
+| sku                           | The SKU for the AI Foundry resource. The default is 'S0'.                                                                                                                                                   | `string`       | `"S0"`            |    no    |
+| tags                          | (Optional) Tags to be applied to all resources.                                                                                                                                                             | `map(string)`  | `null`            |    no    |
+| projects                      | Collection of AI Foundry projects to create. Defaults to a single 'default-project'. Set to an empty list to create no project; override with multiple objects for multi-project deployments.              | `list(object)` | Default object    |    no    |
 
 ## Outputs
 
-| Name                                                     | Description                                                                  |
-|----------------------------------------------------------|------------------------------------------------------------------------------|
-| agent\_capability\_host\_connections\_1                  | The connections used for the agent capability host.                          |
-| agent\_capability\_host\_connections\_2                  | The connections used for the agent capability host.                          |
-| ai\_foundry\_default\_project\_id                        | The resource ID of the AI Foundry Project.                                   |
-| ai\_foundry\_default\_project\_identity\_principal\_id   | The principal ID of the AI Foundry project system-assigned managed identity. |
-| ai\_foundry\_default\_project\_name                      | The name of the AI Foundry Project.                                          |
-| ai\_foundry\_endpoint                                    | The endpoint URL of the AI Foundry account.                                  |
-| ai\_foundry\_id                                          | The resource ID of the AI Foundry account.                                   |
-| ai\_foundry\_model\_deployments\_ids                     | The IDs of the AI Foundry model deployments.                                 |
-| ai\_foundry\_name                                        | The name of the AI Foundry account.                                          |
-| ai\_foundry\_secondary\_project\_id                      | The resource ID of the AI Foundry Project.                                   |
-| ai\_foundry\_secondary\_project\_identity\_principal\_id | The principal ID of the AI Foundry project system-assigned managed identity. |
-| ai\_foundry\_secondary\_project\_name                    | The name of the AI Foundry Project.                                          |
-| application\_insights\_id                                | The resource ID of the Application Insights instance.                        |
-| log\_analytics\_workspace\_id                            | The resource ID of the Log Analytics workspace.                              |
-| resource\_group\_id                                      | The resource ID of the resource group.                                       |
-| resource\_group\_name                                    | The name of the resource group.                                              |
+| Name                                            | Description                                                                                                             |
+|-------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| agent\_capability\_host\_connections             | The shared capability host connections (Cosmos DB, Storage, AI Search) used by all projects.                                |
+| ai\_foundry\_default\_project\_id                   | Resource ID of the default project when only one default project is deployed; otherwise null.                          |
+| ai\_foundry\_default\_project\_identity\_principal\_id| Principal ID of the default project's system-assigned managed identity when a single default project exists; else null.|
+| ai\_foundry\_default\_project\_name                 | Name of the default project when only one default project is deployed; otherwise null.                                 |
+| ai\_foundry\_endpoint                             | The endpoint URL of the AI Foundry account.                                                                           |
+| ai\_foundry\_id                                   | The resource ID of the AI Foundry account.                                                                            |
+| ai\_foundry\_model\_deployments\_ids                | The IDs of the AI Foundry model deployments.                                                                          |
+| ai\_foundry\_name                                 | The name of the AI Foundry account.                                                                                   |
+| ai\_foundry\_projects                             | Map of project metadata keyed by project\_name (id, name, identity_principal_id). Empty if no projects.                |
+| ai\_foundry\_project\_ids                          | Map of project IDs keyed by project\_name. Empty if no projects.                                                       |
+| application\_insights\_id                         | The resource ID of the Application Insights instance.                                                                 |
+| log\_analytics\_workspace\_id                      | The resource ID of the Log Analytics workspace.                                                                       |
+| resource\_group\_id                               | The resource ID of the resource group.                                                                                |
+| resource\_group\_name                             | The name of the resource group.                                                                                       |
 <!-- END_TF_DOCS -->

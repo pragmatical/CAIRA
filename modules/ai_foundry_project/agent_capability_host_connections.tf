@@ -2,12 +2,20 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT license.
 # ---------------------------------------------------------------------
 
+locals {
+  # Create unique connection names by appending project name to resource name
+  # This allows multiple projects to share the same physical resources
+  cosmos_connection_name  = var.agent_capability_host_connections != null ? "${var.agent_capability_host_connections.cosmos_db.name}-${var.project_name}" : null
+  storage_connection_name = var.agent_capability_host_connections != null ? "${var.agent_capability_host_connections.storage_account.name}-${var.project_name}" : null
+  search_connection_name  = var.agent_capability_host_connections != null ? "${var.agent_capability_host_connections.ai_search.name}-${var.project_name}" : null
+}
+
 # Connection to Cosmos DB
 resource "azapi_resource" "cosmosdb_connection" {
   count = var.agent_capability_host_connections != null ? 1 : 0
 
   type                      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01"
-  name                      = var.agent_capability_host_connections.cosmos_db.name
+  name                      = local.cosmos_connection_name
   parent_id                 = azapi_resource.ai_foundry_project.id
   schema_validation_enabled = false
 
@@ -16,7 +24,7 @@ resource "azapi_resource" "cosmosdb_connection" {
   ]
 
   body = {
-    name = var.agent_capability_host_connections.cosmos_db.name
+    name = local.cosmos_connection_name
     properties = {
       category = "CosmosDb"
       target   = var.agent_capability_host_connections.cosmos_db.endpoint
@@ -36,7 +44,7 @@ resource "azapi_resource" "storage_connection" {
   count = var.agent_capability_host_connections != null ? 1 : 0
 
   type                      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01"
-  name                      = var.agent_capability_host_connections.storage_account.name
+  name                      = local.storage_connection_name
   parent_id                 = azapi_resource.ai_foundry_project.id
   schema_validation_enabled = false
 
@@ -45,7 +53,7 @@ resource "azapi_resource" "storage_connection" {
   ]
 
   body = {
-    name = var.agent_capability_host_connections.storage_account.name
+    name = local.storage_connection_name
     properties = {
       category = "AzureStorageAccount"
       target   = var.agent_capability_host_connections.storage_account.primary_blob_endpoint
@@ -68,7 +76,7 @@ resource "azapi_resource" "ai_search_connection" {
   count = var.agent_capability_host_connections != null ? 1 : 0
 
   type                      = "Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01"
-  name                      = var.agent_capability_host_connections.ai_search.name
+  name                      = local.search_connection_name
   parent_id                 = azapi_resource.ai_foundry_project.id
   schema_validation_enabled = false
 
@@ -77,7 +85,7 @@ resource "azapi_resource" "ai_search_connection" {
   ]
 
   body = {
-    name = var.agent_capability_host_connections.ai_search.name
+    name = local.search_connection_name
     properties = {
       category = "CognitiveSearch"
       target   = "https://${var.agent_capability_host_connections.ai_search.name}.search.windows.net"
@@ -128,15 +136,15 @@ resource "azapi_resource" "ai_foundry_project_capability_host" {
       capabilityHostKind = "Agents"
 
       vectorStoreConnections = [
-        var.agent_capability_host_connections.ai_search.name
+        local.search_connection_name
       ]
 
       storageConnections = [
-        var.agent_capability_host_connections.storage_account.name
+        local.storage_connection_name
       ]
 
       threadStorageConnections = [
-        var.agent_capability_host_connections.cosmos_db.name
+        local.cosmos_connection_name
       ]
     }
   }

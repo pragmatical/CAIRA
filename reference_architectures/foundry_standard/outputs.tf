@@ -62,9 +62,9 @@ output "ai_foundry_endpoint" {
   value       = module.ai_foundry.ai_foundry_endpoint
 }
 
-output "agent_capability_host_connections_1" {
-  description = "The connections used for the agent capability host."
-  value       = module.capability_host_resources_1.connections
+output "agent_capability_host_connections" {
+  description = "The shared capability host connections (Cosmos DB, Storage, AI Search) used by all projects."
+  value       = module.capability_host_resources.connections
 }
 
 output "application_insights_id" {

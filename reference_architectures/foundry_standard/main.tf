@@ -41,6 +41,22 @@ locals {
   base_name                  = "standard" # Used as the semantic prefix for naming resources
   resource_group_resource_id = var.resource_group_resource_id != null ? var.resource_group_resource_id : azurerm_resource_group.this[0].id
   resource_group_name        = var.resource_group_resource_id != null ? provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.resource_group_resource_id).resource_group_name : azurerm_resource_group.this[0].name
+
+  # Select raw models: user override or defaults. Using try() to handle null gracefully.
+  # Using currently available models (gpt-4o variants) instead of future-dated models.
+  raw_model_deployments = try(var.model_deployments, [
+    module.common_models.gpt_4o,
+    module.common_models.gpt_4o_mini,
+    module.common_models.text_embedding_3_large
+  ])
+
+  # Normalize each object to guarantee presence of sku attribute.
+  normalized_model_deployments = [for d in local.raw_model_deployments : merge(d, {
+    sku = lookup(d, "sku", null) != null ? d.sku : {
+      name     = "GlobalStandard"
+      capacity = 1
+    }
+  })]
 }
 
 # Core AI Foundry environment module
@@ -58,39 +74,17 @@ module "ai_foundry" {
 
   # Model deployments to make available within Foundry
   # Add/remove models as needed for your workload requirements
-  model_deployments = [
-    module.common_models.gpt_4_1,
-    module.common_models.o4_mini,
-    module.common_models.text_embedding_3_large
-  ]
+  # Use override list if non-empty; otherwise default models.
+  model_deployments = local.normalized_model_deployments
 
   application_insights = module.application_insights
 
   tags = var.tags
 }
 
-# AI Foundry projects (collection-driven). When var.projects has one default element, that is the default project.
-module "projects" {
-  for_each   = { for p in var.projects : p.project_name => p }
-  source     = "../../modules/ai_foundry_project"
-  depends_on = [module.ai_foundry]
-
-  location             = var.location
-  ai_foundry_id        = module.ai_foundry.ai_foundry_id
-  project_name         = each.value.project_name
-  project_display_name = each.value.project_display_name
-  project_description  = each.value.project_description
-
-  agent_capability_host_connections = module.capability_host_resources_1.connections
-  tags                              = var.tags
-}
-
-# This module provisions new resources for AI Foundry agent capability host.
-# If you prefer to use existing resources for the capability host, you can use the
-# existing_resources_agent_capability_host_connections module as a drop-in replacement.
-
-# Capability host resources for the default project.
-module "capability_host_resources_1" {
+# Shared capability host resources for all projects.
+# Single set of Cosmos DB, Storage, and AI Search resources.
+module "capability_host_resources" {
   source = "../../modules/new_resources_agent_capability_host_connections"
 
   location                   = var.location
@@ -100,4 +94,21 @@ module "capability_host_resources_1" {
   cosmos_db_account_name = module.naming.cosmosdb_account.name_unique
   storage_account_name   = module.naming.storage_account.name_unique
   ai_search_name         = module.naming.search_service.name_unique
+}
+
+# AI Foundry projects (collection-driven). All projects share the same capability host resources.
+# Connection names are automatically made unique per project by the ai_foundry_project module.
+module "projects" {
+  for_each   = { for p in var.projects : p.project_name => p }
+  source     = "../../modules/ai_foundry_project"
+  depends_on = [module.ai_foundry, module.capability_host_resources]
+
+  location             = var.location
+  ai_foundry_id        = module.ai_foundry.ai_foundry_id
+  project_name         = each.value.project_name
+  project_display_name = each.value.project_display_name
+  project_description  = each.value.project_description
+
+  agent_capability_host_connections = module.capability_host_resources.connections
+  tags                              = var.tags
 }

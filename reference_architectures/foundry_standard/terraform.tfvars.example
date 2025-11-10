@@ -46,3 +46,35 @@ projects = [
 
 # To deploy NO projects (advanced): set projects = []
 # To deploy ONLY default: remove extra objects or remove whole projects block.
+
+# Optional override of model deployments. If omitted (or set to null) defaults to
+# [gpt-4o, gpt-4o-mini, text_embedding_3_large]. Uncomment and customize as needed.
+# Each object supports optional sku { name, capacity } if you need higher capacity.
+# Note: Use currently available model versions. Future-dated versions will fail deployment.
+model_deployments = [
+  {
+    name    = "gpt-4o"
+    version = "2024-11-20"
+    format  = "OpenAI"
+    sku = {
+      name     = "GlobalStandard"
+      capacity = 2
+    }
+  },
+  {
+    name    = "gpt-4o-mini"
+    version = "2024-07-18"
+    format  = "OpenAI"
+  },
+  {
+    name    = "text-embedding-3-large"
+    version = "1"
+    format  = "OpenAI"
+  }
+]
+
+# Alternative lighter example (comment out above and use this instead):
+# model_deployments = [
+#   { name = "gpt-4o", version = "2024-11-20", format = "OpenAI" },
+#   { name = "text-embedding-3-large", version = "1", format = "OpenAI" }
+# ]
