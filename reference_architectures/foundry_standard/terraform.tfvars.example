@@ -1,0 +1,48 @@
+# Sample terraform.tfvars for foundry_standard
+# Adjust values before running `terraform plan`.
+
+# Azure region (keep aligned with model availability & dependent resource quotas)
+location = "eastus2"
+
+# Use null to create a new resource group or supply an existing RG resource ID:
+# resource_group_resource_id = "/subscriptions/<sub-id>/resourceGroups/<existing-rg>"
+resource_group_resource_id = null
+
+# AI Foundry SKU
+sku = "S0"
+
+# Enable AVM telemetry (set to false only if org policy requires)
+enable_telemetry = true
+
+# Standard tagging for governance & cost allocation
+tags = {
+  environment         = "dev"
+  owner               = "team-ai"
+  cost_center         = "cc-1234"
+  project             = "foundry-standard"
+  data_classification = "internal"
+}
+
+# Unified projects collection.
+# Default behavior (if omitted) provisions a single default project.
+# Below shows multi-project configuration. Ensure unique project_name values.
+projects = [
+  {
+    project_name         = "default-project" # Retains backward-compatible default
+    project_display_name = "Default Project"
+    project_description  = "Default Project description"
+  },
+  {
+    project_name         = "analytics"
+    project_display_name = "Analytics Project"
+    project_description  = "Project for analytics workloads"
+  },
+  {
+    project_name         = "experimentation"
+    project_display_name = "Experimentation Project"
+    project_description  = "Rapid prototyping space"
+  }
+]
+
+# To deploy NO projects (advanced): set projects = []
+# To deploy ONLY default: remove extra objects or remove whole projects block.

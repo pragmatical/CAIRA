@@ -129,6 +129,55 @@ Note: The architecture diagram is similar in shape to the basic configuration wi
    terraform apply
    ```
 
+### Multi-Project Configuration (Unified Projects Collection)
+
+This architecture now uses a single `projects` collection to define all AI Foundry projects. The default value provisions one project with:
+
+- `project_name = "default-project"`
+- `project_display_name = "Default Project"`
+- `project_description = "Default Project description"`
+
+Override `projects` with multiple objects to create several projects; set it to an empty list (`projects = []`) to create no projects (advanced scenarios). All projects currently share the same capability host connections. You can later introduce per-project host resources by adding a dedicated capability host module with a `for_each`.
+
+Example `terraform.tfvars` multi-project snippet:
+
+```hcl
+location  = "swedencentral"
+sku       = "S0"
+tags = {
+  environment = "dev"
+  owner       = "team-ai"
+  project     = "foundry-standard"
+}
+
+projects = [
+  {
+    project_name         = "analytics"
+    project_display_name = "Analytics Project"
+    project_description  = "Project for analytics workloads"
+  },
+  {
+    project_name         = "experimentation"
+    project_display_name = "Experimentation Project"
+    project_description  = "Rapid prototyping space"
+  }
+]
+```
+
+Key outputs:
+
+| Output | Description |
+|--------|-------------|
+| `ai_foundry_projects` | Map of project metadata keyed by project name |
+| `ai_foundry_project_ids` | Map of project IDs keyed by project name |
+| `ai_foundry_default_project_id` | Default project ID when collection length is 1 |
+
+Future extension ideas:
+
+- Introduce per‑project capability host resources via a second variable (e.g., `project_host_mode = "dedicated" | "shared"`).
+- Add validation to enforce unique `project_name` values.
+- Extend outputs to include model deployment associations per project.
+
 ## Controlling Dependent Services (Data Sovereignty)
 
 This configuration wires agent capability host connections to Cosmos DB, Storage, and AI Search. You have two paths:

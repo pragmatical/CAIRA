@@ -38,3 +38,19 @@ variable "tags" {
   description = "(Optional) Tags to be applied to all resources."
 }
 
+variable "projects" {
+  type = list(object({
+    project_name         = string
+    project_display_name = string
+    project_description  = string
+  }))
+  description = "Collection of AI Foundry projects to create. Defaults to a single 'default-project'. Set to an empty list to create no project; override with multiple objects for multi-project deployments."
+  default = [
+    {
+      project_name         = "default-project"
+      project_display_name = "Default Project"
+      project_description  = "Default Project description"
+    }
+  ]
+}
+

@@ -13,18 +13,33 @@ output "ai_foundry_name" {
 }
 
 output "ai_foundry_default_project_id" {
-  description = "The resource ID of the AI Foundry Project."
-  value       = module.default_project.ai_foundry_project_id
+  description = "The resource ID of the AI Foundry default project when the projects collection length is 1 and matches the default object. Otherwise, null."
+  value       = length(module.projects) == 1 ? values({ for k, m in module.projects : k => m.ai_foundry_project_id })[0] : null
 }
 
 output "ai_foundry_default_project_name" {
-  description = "The name of the AI Foundry Project."
-  value       = module.default_project.ai_foundry_project_name
+  description = "The name of the AI Foundry default project when the projects collection length is 1 and matches the default object. Otherwise, null."
+  value       = length(module.projects) == 1 ? values({ for k, m in module.projects : k => m.ai_foundry_project_name })[0] : null
 }
 
 output "ai_foundry_default_project_identity_principal_id" {
-  description = "The principal ID of the AI Foundry project system-assigned managed identity."
-  value       = module.default_project.ai_foundry_project_identity_principal_id
+  description = "The principal ID of the AI Foundry default project's system-assigned managed identity when the projects collection length is 1. Otherwise, null."
+  value       = length(module.projects) == 1 ? values({ for k, m in module.projects : k => m.ai_foundry_project_identity_principal_id })[0] : null
+}
+
+# Aggregated multi-project outputs
+output "ai_foundry_projects" {
+  description = "Map of AI Foundry project metadata keyed by project_name. Empty map if no projects deployed (when var.projects = [])."
+  value = { for k, m in module.projects : k => {
+    id                    = m.ai_foundry_project_id
+    name                  = m.ai_foundry_project_name
+    identity_principal_id = m.ai_foundry_project_identity_principal_id
+  } }
+}
+
+output "ai_foundry_project_ids" {
+  description = "Map of AI Foundry project IDs keyed by project_name. Empty map if no projects deployed."
+  value       = { for k, m in module.projects : k => m.ai_foundry_project_id }
 }
 
 output "ai_foundry_model_deployments_ids" {
@@ -60,24 +75,4 @@ output "application_insights_id" {
 output "log_analytics_workspace_id" {
   description = "The resource ID of the Log Analytics workspace."
   value       = azurerm_log_analytics_workspace.this.id
-}
-
-output "agent_capability_host_connections_2" {
-  description = "The connections used for the agent capability host."
-  value       = module.capability_host_resources_2.connections
-}
-
-output "ai_foundry_secondary_project_id" {
-  description = "The resource ID of the AI Foundry Project."
-  value       = module.secondary_project.ai_foundry_project_id
-}
-
-output "ai_foundry_secondary_project_name" {
-  description = "The name of the AI Foundry Project."
-  value       = module.secondary_project.ai_foundry_project_name
-}
-
-output "ai_foundry_secondary_project_identity_principal_id" {
-  description = "The principal ID of the AI Foundry project system-assigned managed identity."
-  value       = module.secondary_project.ai_foundry_project_identity_principal_id
 }
